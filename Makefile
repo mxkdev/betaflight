@@ -16,7 +16,7 @@
 #
 
 # The target to build, see VALID_TARGETS below
-TARGET    ?= STM32F405
+TARGET    ?= MAMBAF722
 
 # Compile-time options
 OPTIONS   ?=
