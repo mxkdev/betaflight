@@ -507,6 +507,13 @@ int acroTrainerSign(float x)
     return x > 0 ? 1 : -1;
 }
 
+
+// drone ball change:
+FAST_CODE_NOINLINE_DRONE_BALL float applyAcroTrainer(int axis, const rollAndPitchTrims_t* angleTrim, float setPoint)
+{
+    return setPoint;
+}
+
 // Acro Trainer - Manipulate the setPoint to limit axis angle while in acro mode
 // There are three states:
 // 1. Current angle has exceeded limit
