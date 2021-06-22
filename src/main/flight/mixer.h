@@ -117,3 +117,5 @@ float mixerGetThrottle(void);
 mixerMode_e getMixerMode(void);
 bool mixerModeIsFixedWing(mixerMode_e mixerMode);
 bool isFixedWing(void);
+
+void mixerSetThrowThrottle(int throt);

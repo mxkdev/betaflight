@@ -874,12 +874,18 @@ STATIC_UNIT_TESTED float calcHorizonLevelStrength(void)
 // processing power that it should be a non-issue.
 STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_t *pidProfile, const rollAndPitchTrims_t *angleTrim, float currentPidSetpoint) {
     //new code
-    float sum; 
-    for (int i; i < XYZ_AXIS_COUNT; i++){
+    if (FLIGHT_MODE(ANGLE_MODE)){
+        float sum; 
+        for (int i; i < XYZ_AXIS_COUNT; i++){
         sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
+        }
+        sum = sqrt(sum)/2125;
+        if (sum > 1.5){
+            mixerSetThrowThrottle(200);
+        }
     }
-    sum = sqrt(sum);
-        
+    
+    
     
     
     // calculate error angle and limit the angle to the max inclination
