@@ -880,8 +880,11 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
         sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
         }
         sum = sqrt(sum)/2125;
-        if (sum > 1.5){
-            mixerSetThrowThrottle(200);
+        if (sum > 15){
+            mixerSetThrowThrottle(900);
+        }
+        else{
+            mixerSetThrowThrottle(900);
         }
     }
     

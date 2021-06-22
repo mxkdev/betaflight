@@ -632,8 +632,10 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
         }
 
 
-
-        throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
+        else {
+            throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
+        }
+        
         float appliedMotorOutputLow = motorOutputLow;
 #ifdef USE_DYN_IDLE
         if (idleMinMotorRps > 0.0f) {
