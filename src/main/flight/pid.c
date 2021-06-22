@@ -873,6 +873,15 @@ STATIC_UNIT_TESTED float calcHorizonLevelStrength(void)
 // The impact is possibly slightly slower performance on F7/H7 but they have more than enough
 // processing power that it should be a non-issue.
 STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_t *pidProfile, const rollAndPitchTrims_t *angleTrim, float currentPidSetpoint) {
+    //new code
+    float sum; 
+    for (int i; i < XYZ_AXIS_COUNT; i++){
+        sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
+    }
+    sum = sqrt(sum);
+        
+    
+    
     // calculate error angle and limit the angle to the max inclination
     // rcDeflection is in range [-1.0, 1.0]
     float angle = pidProfile->levelAngleLimit * getRcDeflection(axis);
