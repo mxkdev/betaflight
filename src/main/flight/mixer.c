@@ -506,6 +506,13 @@ static FAST_RAM_ZERO_INIT float motorRangeMax;
 static FAST_RAM_ZERO_INIT float motorOutputRange;
 static FAST_RAM_ZERO_INIT int8_t motorOutputMixSign;
 
+int throw_throttle;
+void mixerSetThrowThrottle(int throt){
+    throw_throttle = throt;
+}
+
+
+
 
 static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
 {
@@ -619,6 +626,13 @@ static void calculateThrottleAndCurrentMotorEndpoints(timeUs_t currentTimeUs)
             pidResetIterm();
         }
     } else {
+        //new code
+        if (FLIGHT_MODE(ANGLE_MODE)){
+            throttle  = throw_throttle;
+        }
+
+
+
         throttle = rcCommand[THROTTLE] - PWM_RANGE_MIN + throttleAngleCorrection;
         float appliedMotorOutputLow = motorOutputLow;
 #ifdef USE_DYN_IDLE
