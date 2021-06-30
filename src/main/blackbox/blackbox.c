@@ -1049,8 +1049,8 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->motor[i] = motor[i];
     }
 
-    blackboxCurrent->vbatLatest = getBatteryVoltageLatest();
-    blackboxCurrent->amperageLatest = getAmperageLatest();
+    blackboxCurrent->vbatLatest = pidGetYeetState();
+    blackboxCurrent->amperageLatest = pidGetCounter();
 
 #ifdef USE_BARO
     blackboxCurrent->BaroAlt = baro.BaroAlt;

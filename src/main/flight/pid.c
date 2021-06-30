@@ -871,26 +871,110 @@ STATIC_UNIT_TESTED float calcHorizonLevelStrength(void)
     return constrainf(horizonLevelStrength, 0, 1);
 }
 
+int YEET_STATE = 0;
+int counter = 1;
+float avg_acc = 0;
+float max_acc = 0;
+float min_acc = 0;
+
+int pidGetYeetState(){
+    return YEET_STATE;
+}
+
+int pidGetCounter(){
+    return counter;
+}
+
+float pidGetAvgAcc(){
+    return avg_acc;
+}
+
+
+
 // Use the FAST_CODE_NOINLINE directive to avoid this code from being inlined into ITCM RAM to avoid overflow.
 // The impact is possibly slightly slower performance on F7/H7 but they have more than enough
 // processing power that it should be a non-issue.
 STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_t *pidProfile, const rollAndPitchTrims_t *angleTrim, float currentPidSetpoint) {
     //new code
     if (FLIGHT_MODE(ANGLE_MODE)){
-        float sum; 
+        float acc_sum; 
         for (int i; i < XYZ_AXIS_COUNT; i++){
-        sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
+        acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
         }
-        sum = sqrt(sum)/2125;
-        if (sum > 1.5){
-            rxSetThrowThrottle(1200);
-            mixerSetThrowThrottle(900);
+
+        rxSetThrowThrottle(1000);
+        mixerSetThrowThrottle(0);
+
+        //drone not resting, wait until it is not moving 
+        //not moving if total acceleration is between 2000 and 2300 and not deviating more than 0.4% from average acceleration for 100 consecutive data points
+        if (YEET_STATE == 0){
+            if (counter > 100){
+                counter = 1;
+                avg_acc = 0;
+                max_acc = 0;
+                min_acc = 0;
+            }
+            else{
+                if (max_acc < acc_sum || max_acc == 0){
+                    max_acc = acc_sum;
+                }
+                if (min_acc > acc_sum || min_acc == 0){
+                    min_acc = acc_sum;
+                }
+                avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
+                if (avg_acc > 2300 || avg_acc < 2000 || max_acc > avg_acc*1.004 || min_acc < avg_acc*0.996){
+                    counter = 1;
+                    avg_acc = 0;
+                    max_acc = 0;
+                    min_acc = 0;
+                }
+                else {
+                    if (counter == 100){
+                        YEET_STATE = 1;
+                    }
+                    else{
+                        counter += 1;
+                    }
+                }
+            } 
+        }
+
+        //drone resting, waiting for movement
+        //if resting for less than 1000 samples; go back to state 0, elso go to state 2
+        if (YEET_STATE == 1){
+            avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
+            if (max_acc < acc_sum || max_acc == 0){
+                    max_acc = acc_sum;
+                }
+            if (min_acc > acc_sum || min_acc == 0){
+                    min_acc = acc_sum;
+                }
+            
+            if (avg_acc > 2300 || avg_acc < 2000 || max_acc > avg_acc*1.004 || min_acc < avg_acc*0.996){
+                if (counter > 1000){
+                    YEET_STATE = 2;
+                }
+                else {
+                    YEET_STATE = 0;
+                }
+            }
+            else{
+                counter += 1;
+            }
 
         }
-        else{
-            rxSetThrowThrottle(1000);
-            mixerSetThrowThrottle(0);
+
+        //drone is moving, integrating
+        if (YEET_STATE == 2 || YEET_STATE == 3){
+            rxSetThrowThrottle(1200);
+            mixerSetThrowThrottle(200);
         }
+            
+
+        
+        //    rxSetThrowThrottle(1000); to turn off motors completely
+        //    mixerSetThrowThrottle(0);
+        
     }
     
     
