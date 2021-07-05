@@ -903,7 +903,8 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
         for (int i; i < XYZ_AXIS_COUNT; i++){
         acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
         }
-
+        acc_sum = sqrtf(acc_sum);
+        
         rxSetThrowThrottle(1000);
         mixerSetThrowThrottle(0);
 
@@ -914,7 +915,7 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
         if (YEET_STATE == 0){
 
             if (counter > 100){
-                counter = 15;
+                counter = 0;
                 avg_acc = 0;
                 max_acc = 0;
                 min_acc = 0;
@@ -928,8 +929,8 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                 }
                 avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
                 if (avg_acc > 2300 || avg_acc < 2000 || max_acc > avg_acc*1.004 || min_acc < avg_acc*0.996){
-                    counter = 10;
-                    avg_acc = 0;
+                    //counter = 0;
+                    //avg_acc = 0;
                     max_acc = 0;
                     min_acc = 0;
                 }
