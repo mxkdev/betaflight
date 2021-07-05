@@ -904,17 +904,17 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
         acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
         }
         acc_sum = sqrtf(acc_sum);
-        
+
         rxSetThrowThrottle(1000);
         mixerSetThrowThrottle(0);
 
         counter += 1;
 
         //drone not resting, wait until it is not moving 
-        //not moving if total acceleration is between 2000 and 2300 and not deviating more than 0.4% from average acceleration for 100 consecutive data points
+        //not moving if total acceleration is between 2000 and 2300 and not deviating more than 0.4% from average acceleration for 1000 consecutive data points
         if (YEET_STATE == 0){
 
-            if (counter > 100){
+            if (counter > 1000){
                 counter = 0;
                 avg_acc = 0;
                 max_acc = 0;
@@ -928,14 +928,14 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                     min_acc = acc_sum;
                 }
                 avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
-                if (avg_acc > 2300 || avg_acc < 2000 || max_acc > avg_acc*1.004 || min_acc < avg_acc*0.996){
-                    //counter = 0;
-                    //avg_acc = 0;
+                if (avg_acc > 2070 || avg_acc < 2030 || max_acc > avg_acc*1.006 || min_acc < avg_acc*0.994){
+                    counter = 0;
+                    avg_acc = 0;
                     max_acc = 0;
                     min_acc = 0;
                 }
                 else {
-                    if (counter == 100){
+                    if (counter == 1000){
                         YEET_STATE = 1;
                     }
                     
@@ -944,7 +944,7 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
         }
 
         //drone resting, waiting for movement
-        //if resting for less than 1000 samples; go back to state 0, elso go to state 2
+        //if resting for less than 8000 samples; go back to state 0, elso go to state 2
         if (YEET_STATE == 1){
             avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
             if (max_acc < acc_sum || max_acc == 0){
@@ -954,12 +954,15 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                     min_acc = acc_sum;
                 }
             
-            if (avg_acc > 2300 || avg_acc < 2000 || max_acc > avg_acc*1.004 || min_acc < avg_acc*0.996){
-                if (counter > 1000){
+            if (avg_acc > 2070 || avg_acc < 2030 || max_acc > avg_acc*1.006 || min_acc < avg_acc*0.994){
+                if (counter > 8000){
                     YEET_STATE = 2;
                 }
                 else {
                     YEET_STATE = 0;
+                    min_acc = 0;
+                    max_acc = 0;
+                    avg_acc = 0;
                     counter = 0;
                 }
             }
