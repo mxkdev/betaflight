@@ -227,8 +227,9 @@ extern uint32_t targetPidLooptime;
 extern float throttleBoost;
 extern pt1Filter_t throttleLpf;
 
-extern int pidGetYeetState();
-extern int pidGetCounter();
+extern uint16_t pidGetYeetState();
+extern int32_t pidGetCounter();
+extern float pidGetAvgAcc();
 
 void pidResetIterm(void);
 void pidStabilisationState(pidStabilisationState_e pidControllerState);

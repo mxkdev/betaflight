@@ -871,17 +871,18 @@ STATIC_UNIT_TESTED float calcHorizonLevelStrength(void)
     return constrainf(horizonLevelStrength, 0, 1);
 }
 
-int YEET_STATE = 0;
-int counter = 1;
-float avg_acc = 0;
-float max_acc = 0;
-float min_acc = 0;
+uint16_t YEET_STATE;
+int32_t counter;
+float avg_acc;
+float max_acc;
+float min_acc;
 
-int pidGetYeetState(){
+uint16_t pidGetYeetState(){
     return YEET_STATE;
 }
 
-int pidGetCounter(){
+int32_t pidGetCounter(){
+    counter += 1;
     return counter;
 }
 
@@ -897,6 +898,7 @@ float pidGetAvgAcc(){
 STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_t *pidProfile, const rollAndPitchTrims_t *angleTrim, float currentPidSetpoint) {
     //new code
     if (FLIGHT_MODE(ANGLE_MODE)){
+
         float acc_sum; 
         for (int i; i < XYZ_AXIS_COUNT; i++){
         acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
@@ -905,11 +907,14 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
         rxSetThrowThrottle(1000);
         mixerSetThrowThrottle(0);
 
+        counter += 1;
+
         //drone not resting, wait until it is not moving 
         //not moving if total acceleration is between 2000 and 2300 and not deviating more than 0.4% from average acceleration for 100 consecutive data points
         if (YEET_STATE == 0){
+
             if (counter > 100){
-                counter = 1;
+                counter = 15;
                 avg_acc = 0;
                 max_acc = 0;
                 min_acc = 0;
@@ -923,7 +928,7 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                 }
                 avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
                 if (avg_acc > 2300 || avg_acc < 2000 || max_acc > avg_acc*1.004 || min_acc < avg_acc*0.996){
-                    counter = 1;
+                    counter = 10;
                     avg_acc = 0;
                     max_acc = 0;
                     min_acc = 0;
@@ -932,9 +937,7 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                     if (counter == 100){
                         YEET_STATE = 1;
                     }
-                    else{
-                        counter += 1;
-                    }
+                    
                 }
             } 
         }
@@ -956,10 +959,8 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                 }
                 else {
                     YEET_STATE = 0;
+                    counter = 0;
                 }
-            }
-            else{
-                counter += 1;
             }
 
         }

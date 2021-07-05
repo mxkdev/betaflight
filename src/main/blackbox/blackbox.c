@@ -1038,7 +1038,7 @@ static void loadMainState(timeUs_t currentTimeUs)
         blackboxCurrent->setpoint[i] = lrintf(pidGetPreviousSetpoint(i));
     }
     // log the final throttle value used in the mixer
-    blackboxCurrent->setpoint[3] = lrintf(mixerGetThrottle() * 1000);
+    blackboxCurrent->setpoint[3] = pidGetAvgAcc();
 
     for (int i = 0; i < DEBUG16_VALUE_COUNT; i++) {
         blackboxCurrent->debug[i] = debug[i];
@@ -1050,7 +1050,7 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
 
     blackboxCurrent->vbatLatest = pidGetYeetState();
-    blackboxCurrent->amperageLatest = pidGetCounter();
+    blackboxCurrent->amperageLatest = 1; pidGetCounter();
 
 #ifdef USE_BARO
     blackboxCurrent->BaroAlt = baro.BaroAlt;
