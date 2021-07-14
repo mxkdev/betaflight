@@ -898,10 +898,10 @@ float pidGetAvgAcc(){
 STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_t *pidProfile, const rollAndPitchTrims_t *angleTrim, float currentPidSetpoint) {
     //new code
     if (FLIGHT_MODE(ANGLE_MODE)){
-
+        fp_angles_t attitudeAngles;
         float acc_sum; 
         for (int i; i < XYZ_AXIS_COUNT; i++){
-        acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]);
+        acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]); //why convert to long??? 
         }
         acc_sum = sqrtf(acc_sum);
 
@@ -971,6 +971,14 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
 
         //drone is moving, integrating
         if (YEET_STATE == 2 || YEET_STATE == 3){
+            attitudeAngles.angles.roll = degreesToRadians(attitude.values.roll/10.f); //convert to degrees from decidegrees, then to rad
+            attitudeAngles.angles.pitch = degreesToRadians(attitude.values.pitch/10.f);
+            attitudeAngles.angles.yaw = degreesToRadians(attitude.values.yaw/10.f);
+            struct fp_vector acc_all = {{lrint(acc.accADC[0]), lrint(acc.accADC[1]), lrint(acc.accADC[2])}};
+            rotateV(&acc_all, &attitudeAngles);
+
+            timeUs_t currentTime = micros();
+
             rxSetThrowThrottle(1200);
             mixerSetThrowThrottle(200);
         }
