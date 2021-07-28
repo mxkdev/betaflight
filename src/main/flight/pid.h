@@ -230,6 +230,9 @@ extern pt1Filter_t throttleLpf;
 extern uint16_t pidGetYeetState();
 extern int32_t pidGetCounter();
 extern float pidGetAvgAcc();
+extern float pidGetVelX();
+extern float pidGetVelY();
+extern float pidGetVelZ();
 
 void pidResetIterm(void);
 void pidStabilisationState(pidStabilisationState_e pidControllerState);

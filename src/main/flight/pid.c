@@ -876,13 +876,17 @@ int32_t counter;
 float avg_acc;
 float max_acc;
 float min_acc;
+float vel_x;
+float vel_y;
+float vel_z;
+
+timeUs_t lastTime;
 
 uint16_t pidGetYeetState(){
     return YEET_STATE;
 }
 
 int32_t pidGetCounter(){
-    counter += 1;
     return counter;
 }
 
@@ -890,7 +894,17 @@ float pidGetAvgAcc(){
     return avg_acc;
 }
 
+float pidGetVelX(){
+    return vel_x;
+}
 
+float pidGetVelY(){
+    return vel_y;
+}
+
+float pidGetVelZ(){
+    return vel_z;
+}
 
 // Use the FAST_CODE_NOINLINE directive to avoid this code from being inlined into ITCM RAM to avoid overflow.
 // The impact is possibly slightly slower performance on F7/H7 but they have more than enough
@@ -898,96 +912,134 @@ float pidGetAvgAcc(){
 STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_t *pidProfile, const rollAndPitchTrims_t *angleTrim, float currentPidSetpoint) {
     //new code
     if (FLIGHT_MODE(ANGLE_MODE)){
-        fp_angles_t attitudeAngles;
-        float acc_sum; 
-        for (int i; i < XYZ_AXIS_COUNT; i++){
-        acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]); //why convert to long??? 
-        }
-        acc_sum = sqrtf(acc_sum);
 
-        rxSetThrowThrottle(1000);
-        mixerSetThrowThrottle(0);
+        if (axis == 0){
 
-        counter += 1;
-
-        //drone not resting, wait until it is not moving 
-        //not moving if total acceleration is between 2000 and 2300 and not deviating more than 0.4% from average acceleration for 1000 consecutive data points
-        if (YEET_STATE == 0){
-
-            if (counter > 1000){
-                counter = 0;
-                avg_acc = 0;
-                max_acc = 0;
-                min_acc = 0;
+            float acc_sum; 
+            for (int i; i < XYZ_AXIS_COUNT; i++){
+            acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]); //why convert to long??? 
             }
-            else{
-                if (max_acc < acc_sum || max_acc == 0){
-                    max_acc = acc_sum;
-                }
-                if (min_acc > acc_sum || min_acc == 0){
-                    min_acc = acc_sum;
-                }
-                avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
-                if (avg_acc > 2070 || avg_acc < 2030 || max_acc > avg_acc*1.006 || min_acc < avg_acc*0.994){
+            acc_sum = sqrtf(acc_sum);
+
+            rxSetThrowThrottle(1000);
+            mixerSetThrowThrottle(0);
+
+            counter += 1;
+
+            //drone not resting, wait until it is not moving 
+            //not moving if total acceleration is between 2000 and 2300 and not deviating more than 0.4% from average acceleration for 1000 consecutive data points
+            if (YEET_STATE == 0){
+
+                if (counter > 1000){
                     counter = 0;
                     avg_acc = 0;
                     max_acc = 0;
                     min_acc = 0;
                 }
-                else {
-                    if (counter == 1000){
-                        YEET_STATE = 1;
+                else{
+                    if (max_acc < acc_sum || max_acc == 0){
+                        max_acc = acc_sum;
                     }
-                    
-                }
-            } 
-        }
-
-        //drone resting, waiting for movement
-        //if resting for less than 8000 samples; go back to state 0, elso go to state 2
-        if (YEET_STATE == 1){
-            avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
-            if (max_acc < acc_sum || max_acc == 0){
-                    max_acc = acc_sum;
-                }
-            if (min_acc > acc_sum || min_acc == 0){
-                    min_acc = acc_sum;
-                }
-            
-            if (avg_acc > 2070 || avg_acc < 2030 || max_acc > avg_acc*1.006 || min_acc < avg_acc*0.994){
-                if (counter > 8000){
-                    YEET_STATE = 2;
-                }
-                else {
-                    YEET_STATE = 0;
-                    min_acc = 0;
-                    max_acc = 0;
-                    avg_acc = 0;
-                    counter = 0;
-                }
+                    if (min_acc > acc_sum || min_acc == 0){
+                        min_acc = acc_sum;
+                    }
+                    avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
+                    if (avg_acc > 2080 || avg_acc < 2020 || max_acc > avg_acc*1.01 || min_acc < avg_acc*0.99){
+                        counter = 0;
+                        avg_acc = 0;
+                        max_acc = 0;
+                        min_acc = 0;
+                    }
+                    else {
+                        if (counter == 1000){
+                            YEET_STATE = 1;
+                        }
+                        
+                    }
+                } 
             }
 
-        }
+            //drone resting, waiting for movement
+            //if resting for less than 1000 samples; go back to state 0, elso go to state 2
+            else if (YEET_STATE == 1){
+                avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
+                if (max_acc < acc_sum || max_acc == 0){
+                        max_acc = acc_sum;
+                    }
+                if (min_acc > acc_sum || min_acc == 0){
+                        min_acc = acc_sum;
+                    }
+                
+                if (avg_acc > 2080 || avg_acc < 2020 || max_acc > avg_acc*1.01 || min_acc < avg_acc*0.99){
+                    if (counter > 1000){
+                        YEET_STATE = 2;
+                    }
+                    else {
+                        YEET_STATE = 0;
+                        min_acc = 0;
+                        max_acc = 0;
+                        avg_acc = 0;
+                        counter = 0;
+                    }
+                }
 
-        //drone is moving, integrating
-        if (YEET_STATE == 2 || YEET_STATE == 3){
-            attitudeAngles.angles.roll = degreesToRadians(attitude.values.roll/10.f); //convert to degrees from decidegrees, then to rad
-            attitudeAngles.angles.pitch = degreesToRadians(attitude.values.pitch/10.f);
-            attitudeAngles.angles.yaw = degreesToRadians(attitude.values.yaw/10.f);
-            struct fp_vector acc_all = {{lrint(acc.accADC[0]), lrint(acc.accADC[1]), lrint(acc.accADC[2])}};
-            rotateV(&acc_all, &attitudeAngles);
+                
 
-            timeUs_t currentTime = micros();
+            }
 
-            rxSetThrowThrottle(1200);
-            mixerSetThrowThrottle(200);
-        }
+            //drone is moving, integrating
+            else if (YEET_STATE == 2 || YEET_STATE == 3){
+                quaternion quat;
+                getQuaternion(&quat);
+                quaternion temp;
+                quaternion acc_all; 
+                acc_all.w = 0;
+                acc_all.x = acc.accADC[0];
+                acc_all.y = acc.accADC[1];
+                acc_all.z = acc.accADC[2];
+                quaternion acc_earth_frame;
+                imuQuaternionMultiplication(&quat, &acc_all, &temp);
+                acc_all.x = -acc_all.x;
+                acc_all.y = -acc_all.y;
+                acc_all.z = -acc_all.z;
+                imuQuaternionMultiplication(&temp, &acc_all, &acc_earth_frame);
+                
+                timeDelta_t timestep = cmpTimeUs(micros(), lastTime);
+                vel_x += acc_earth_frame.x;
+                vel_y += acc_earth_frame.y;
+                vel_z += (acc_earth_frame.z - avg_acc);
+
+                if (acc_sum/avg_acc*9.81 > 25 && YEET_STATE == 2){
+                    YEET_STATE = 3;
+                    counter = 0;
+                }
             
+                if (YEET_STATE == 3){
+                    //float avg_z_acc;
+                    //avg_z_acc = (avg_z_acc*counter + acc_all.Z)/(counter+1);
 
-        
-        //    rxSetThrowThrottle(1000); to turn off motors completely
-        //    mixerSetThrowThrottle(0);
-        
+                    if (counter > 300) {
+                    // && avg_z_acc/avg_acc*9.81f > -3 && avg_z_acc/avg_acc*9.81f < 2)
+                        YEET_STATE = 4;
+                    }
+                                
+                    
+                }              
+                
+
+                
+            }
+
+            else if (YEET_STATE == 4){
+                rxSetThrowThrottle(1500);
+                mixerSetThrowThrottle(500);
+            }
+                
+            lastTime = micros();
+            
+            //    rxSetThrowThrottle(1000); to turn off motors completely
+            //    mixerSetThrowThrottle(0);
+        }
     }
     
     
@@ -1001,6 +1053,7 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
 #endif
     angle = constrainf(angle, -pidProfile->levelAngleLimit, pidProfile->levelAngleLimit);
     const float errorAngle = angle - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
+
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // ANGLE mode - control is angle based
         currentPidSetpoint = errorAngle * levelGain;
