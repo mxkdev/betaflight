@@ -999,15 +999,15 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                 acc_all.z = acc.accADC[2];
                 quaternion acc_earth_frame;
                 imuQuaternionMultiplication(&quat, &acc_all, &temp);
-                acc_all.x = -acc_all.x;
-                acc_all.y = -acc_all.y;
-                acc_all.z = -acc_all.z;
-                imuQuaternionMultiplication(&temp, &acc_all, &acc_earth_frame);
+                quat.x = -quat.x;
+                quat.y = -quat.y;
+                quat.z = -quat.z;
+                imuQuaternionMultiplication(&temp, &quat, &acc_earth_frame);
                 
                 timeDelta_t timestep = cmpTimeUs(micros(), lastTime);
-                vel_x += acc_earth_frame.x;
-                vel_y += acc_earth_frame.y;
-                vel_z += (acc_earth_frame.z - avg_acc);
+                vel_x += acc_earth_frame.x/1000;
+                vel_y += acc_earth_frame.y/1000;
+                vel_z += (acc_earth_frame.z - avg_acc)/1000;
 
                 if (acc_sum/avg_acc*9.81 > 25 && YEET_STATE == 2){
                     YEET_STATE = 3;
@@ -1031,8 +1031,8 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
             }
 
             else if (YEET_STATE == 4){
-                rxSetThrowThrottle(1500);
-                mixerSetThrowThrottle(500);
+                //rxSetThrowThrottle(1500);
+                //mixerSetThrowThrottle(500);
             }
                 
             lastTime = micros();
