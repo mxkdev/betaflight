@@ -879,6 +879,9 @@ float min_acc;
 float vel_x;
 float vel_y;
 float vel_z;
+float yeet_back_pitch;
+float yeet_back_roll;
+float avg_z_acc;
 
 timeUs_t lastTime;
 
@@ -1014,15 +1017,19 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                     counter = 0;
                 }
             
-                if (YEET_STATE == 3){
-                    //float avg_z_acc;
-                    //avg_z_acc = (avg_z_acc*counter + acc_all.Z)/(counter+1);
-
-                    if (counter > 300) {
-                    // && avg_z_acc/avg_acc*9.81f > -3 && avg_z_acc/avg_acc*9.81f < 2)
+                else if (YEET_STATE == 3){
+                    avg_z_acc = (avg_z_acc*(counter-1) + acc_all.z)/counter;
+                    if (counter == 20){
+                        if (avg_z_acc/avg_acc*9.81f > -3 && avg_z_acc/avg_acc*9.81f < 2) {
                         YEET_STATE = 4;
-                    }
-                                
+                        counter = 0;
+                        }
+                        //detected free fall
+                        else {
+                            counter = 0;
+                            avg_z_acc = 0;
+                        }
+                    }                                
                     
                 }              
                 
@@ -1031,8 +1038,57 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
             }
 
             else if (YEET_STATE == 4){
-                //rxSetThrowThrottle(1500);
-                //mixerSetThrowThrottle(500);
+                if (counter > 250){
+
+                    if (ABS(attitude.raw[0])<30 && ABS(attitude.raw[1])<30){
+                        YEET_STATE = 5;                
+                    }
+                    else {
+                        rxSetThrowThrottle(1500);
+                        mixerSetThrowThrottle(500);
+                    }
+                    
+                                       
+                }
+                                
+            }
+
+            else if (YEET_STATE == 5){
+                quaternion quat;
+                getQuaternion(&quat);
+                quat.x = -quat.x;
+                quat.y = -quat.y;
+                quat.z = -quat.z;
+                quaternion temp;
+                quaternion vel_all; 
+                vel_all.w = 0;
+                vel_all.x = -vel_x;
+                vel_all.y = -vel_y;
+                vel_all.z = vel_z;
+                quaternion vel_local_frame;
+                imuQuaternionMultiplication(&quat, &vel_all, &temp);
+                quat.x = -quat.x;
+                quat.y = -quat.y;
+                quat.z = -quat.z;
+                imuQuaternionMultiplication(&temp, &quat, &vel_local_frame);
+                float xy_sum = sqrtf(vel_local_frame.x*vel_local_frame.x + vel_local_frame.y*vel_local_frame.y);
+                yeet_back_roll = -vel_local_frame.y/xy_sum*50;
+                yeet_back_pitch = vel_local_frame.x/xy_sum*50;
+                rxSetThrowThrottle(1500);
+                mixerSetThrowThrottle(500);
+                YEET_STATE = 6;
+            }
+
+            else if (YEET_STATE == 6){
+                if (counter > 1300){
+                    rxSetThrowThrottle(1000);// to turn off motors completely
+                    mixerSetThrowThrottle(0);
+                }
+                else{
+                    rxSetThrowThrottle(1500);
+                    mixerSetThrowThrottle(800);
+                }
+                
             }
                 
             lastTime = micros();
@@ -1047,10 +1103,22 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
     
     // calculate error angle and limit the angle to the max inclination
     // rcDeflection is in range [-1.0, 1.0]
-    float angle = pidProfile->levelAngleLimit * getRcDeflection(axis);
+    //float angle = pidProfile->levelAngleLimit * getRcDeflection(axis);
 #ifdef USE_GPS_RESCUE
-    angle += gpsRescueAngle[axis] / 100; // ANGLE IS IN CENTIDEGREES
+    //angle += gpsRescueAngle[axis] / 100; // ANGLE IS IN CENTIDEGREES
 #endif
+    float angle;
+    if (YEET_STATE == 6){
+        if (axis == 0){
+            angle = yeet_back_roll;
+        }
+        else {
+            angle = yeet_back_pitch;
+        }
+    }
+    else{
+        angle = 0;
+    }
     angle = constrainf(angle, -pidProfile->levelAngleLimit, pidProfile->levelAngleLimit);
     const float errorAngle = angle - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
 
