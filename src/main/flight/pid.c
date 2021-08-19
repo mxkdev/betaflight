@@ -1050,6 +1050,10 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                     
                                        
                 }
+                else{
+                    rxSetThrowThrottle(1500);
+                    mixerSetThrowThrottle(100);
+                }
                                 
             }
 
