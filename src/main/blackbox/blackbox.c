@@ -1034,23 +1034,27 @@ static void loadMainState(timeUs_t currentTimeUs)
     }
 
     // log the currentPidSetpoint values applied to the PID controller
-    for (int i = 0; i < XYZ_AXIS_COUNT; i++) {
-        blackboxCurrent->setpoint[i] = lrintf(pidGetPreviousSetpoint(i));
-    }
+    //for (int i = 0; i < XYZ_AXIS_COUNT; i++) {
+      //  blackboxCurrent->setpoint[i] = lrintf(pidGetPreviousSetpoint(i));
+    //}
+    blackboxCurrent->setpoint[0] = lrintf(pidGetVelX());
+    blackboxCurrent->setpoint[1] = lrintf(pidGetVelY());
+    blackboxCurrent->setpoint[2] = lrintf(pidGetVelZ());
+
     // log the final throttle value used in the mixer
-    blackboxCurrent->setpoint[3] = lrintf(mixerGetThrottle() * 1000);
+    blackboxCurrent->setpoint[3] = (int) pidGetAvgAcc();
 
     for (int i = 0; i < DEBUG16_VALUE_COUNT; i++) {
         blackboxCurrent->debug[i] = debug[i];
     }
 
     const int motorCount = getMotorCount();
-    for (int i = 0; i < motorCount; i++) {
-        blackboxCurrent->motor[i] = motor[i];
-    }
+    //for (int i = 0; i < motorCount; i++) {
+      //  blackboxCurrent->motor[i] = motor[i];
+    //}
 
-    blackboxCurrent->vbatLatest = getBatteryVoltageLatest();
-    blackboxCurrent->amperageLatest = getAmperageLatest();
+    blackboxCurrent->vbatLatest = pidGetYeetState();
+    blackboxCurrent->amperageLatest = pidGetCounter();
 
 #ifdef USE_BARO
     blackboxCurrent->BaroAlt = baro.BaroAlt;

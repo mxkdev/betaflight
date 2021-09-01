@@ -62,6 +62,8 @@
 
 #include "pid.h"
 
+#include "rx/rx.h"
+
 typedef enum {
     LEVEL_MODE_OFF = 0,
     LEVEL_MODE_R,
@@ -869,18 +871,312 @@ STATIC_UNIT_TESTED float calcHorizonLevelStrength(void)
     return constrainf(horizonLevelStrength, 0, 1);
 }
 
+uint16_t YEET_STATE;
+uint16_t THROW_TYPE;
+int32_t counter;
+float avg_acc;
+float max_acc;
+float min_acc;
+float vel_x;
+float vel_y;
+float vel_z;
+float yeet_back_pitch;
+float yeet_back_roll;
+float avg_throw_acc;
+
+timeUs_t lastTime;
+
+uint16_t pidGetYeetState(){
+    return YEET_STATE;
+}
+
+int32_t pidGetCounter(){
+    return counter;
+}
+
+float pidGetAvgAcc(){
+    return avg_acc;
+}
+
+float pidGetVelX(){
+    return vel_x;
+}
+
+float pidGetVelY(){
+    return vel_y;
+}
+
+float pidGetVelZ(){
+    return vel_z;
+}
+
 // Use the FAST_CODE_NOINLINE directive to avoid this code from being inlined into ITCM RAM to avoid overflow.
 // The impact is possibly slightly slower performance on F7/H7 but they have more than enough
 // processing power that it should be a non-issue.
 STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_t *pidProfile, const rollAndPitchTrims_t *angleTrim, float currentPidSetpoint) {
+    //new code
+    if (FLIGHT_MODE(ANGLE_MODE)){
+
+        if (axis == 0){
+
+            float acc_sum; 
+            for (int i; i < XYZ_AXIS_COUNT; i++){
+            acc_sum += lrintf(acc.accADC[i])*lrintf(acc.accADC[i]); //why convert to long??? 
+            }
+            acc_sum = sqrtf(acc_sum);
+
+            rxSetThrowThrottle(1000);
+            mixerSetThrowThrottle(0);
+
+            counter += 1;
+
+            //drone not resting, wait until it is not moving 
+            //not moving if total acceleration is between 2000 and 2300 and not deviating more than 0.4% from average acceleration for 1000 consecutive data points
+            if (YEET_STATE == 0){
+
+                if (counter > 1000){
+                    counter = 0;
+                    avg_acc = 0;
+                    max_acc = 0;
+                    min_acc = 0;
+                }
+                else{
+                    if (max_acc < acc_sum || max_acc == 0){
+                        max_acc = acc_sum;
+                    }
+                    if (min_acc > acc_sum || min_acc == 0){
+                        min_acc = acc_sum;
+                    }
+                    avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
+                    if (avg_acc > 2080 || avg_acc < 2020 || max_acc > avg_acc*1.01 || min_acc < avg_acc*0.99){
+                        counter = 0;
+                        avg_acc = 0;
+                        max_acc = 0;
+                        min_acc = 0;
+                    }
+                    else {
+                        if (counter == 1000){
+                            YEET_STATE = 1;
+                        }
+                        
+                    }
+                } 
+            }
+
+            //drone resting, waiting for movement
+            //if resting for less than 1000 samples; go back to state 0, elso go to state 2
+            else if (YEET_STATE == 1){
+                avg_acc = (avg_acc*(counter-1) + acc_sum)/counter;
+                if (max_acc < acc_sum || max_acc == 0){
+                        max_acc = acc_sum;
+                    }
+                if (min_acc > acc_sum || min_acc == 0){
+                        min_acc = acc_sum;
+                    }
+                
+                if (avg_acc > 2080 || avg_acc < 2020 || max_acc > avg_acc*1.01 || min_acc < avg_acc*0.99){
+                    if (counter > 1000){
+                        YEET_STATE = 2;
+                    }
+                    else {
+                        YEET_STATE = 0;
+                        min_acc = 0;
+                        max_acc = 0;
+                        avg_acc = 0;
+                        counter = 0;
+                    }
+                }
+
+                
+
+            }
+
+            //drone is moving, integrating
+            else if (YEET_STATE == 2 || YEET_STATE == 3){
+                quaternion quat;
+                getQuaternion(&quat);
+                quaternion temp;
+                quaternion acc_all; 
+                acc_all.w = 0;
+                acc_all.x = acc.accADC[0];
+                acc_all.y = acc.accADC[1];
+                acc_all.z = acc.accADC[2];
+                quaternion acc_earth_frame;
+                imuQuaternionMultiplication(&quat, &acc_all, &temp);
+                quat.x = -quat.x;
+                quat.y = -quat.y;
+                quat.z = -quat.z;
+                imuQuaternionMultiplication(&temp, &quat, &acc_earth_frame);
+                
+                timeDelta_t timestep = cmpTimeUs(micros(), lastTime);
+                vel_x += acc_earth_frame.x/1000;
+                vel_y += acc_earth_frame.y/1000;
+                vel_z += (acc_earth_frame.z - avg_acc)/1000;
+
+                //if (acc_sum/avg_acc*9.81 > 25 && YEET_STATE == 2){
+                //try throw detection only by free fall -> close to zero acceleration
+                if (acc_sum/avg_acc*9.81 > 0 && YEET_STATE == 2){
+                    YEET_STATE = 3;
+                    counter = 0;
+                }
+            
+                else if (YEET_STATE == 3){
+                    //avg_z_acc = (avg_z_acc*(counter-1) + acc_all.z)/counter;
+                    avg_throw_acc = (avg_throw_acc*(counter-1) + acc_sum)/counter;
+                    if (counter == 20){
+                        if (avg_throw_acc/avg_acc < 0.15) {
+                        YEET_STATE = 4;
+                        counter = 0;
+                        if (sqrtf(vel_x*vel_x+vel_y*vel_y)/avg_acc < 0.05){
+                            THROW_TYPE = 1;
+                        }
+                        else{
+                            THROW_TYPE = 0;
+                        }
+                        }
+                        //detected free fall
+                        else {
+                            counter = 0;
+                            avg_throw_acc = 0;
+                        }
+                    }                                
+                    
+                }              
+                
+
+                
+            }
+
+            else if (YEET_STATE == 4){
+                if (THROW_TYPE == 1){
+                    if (counter > 50){
+                        if (ABS(attitude.raw[0])<30 && ABS(attitude.raw[1])<30){
+                            YEET_STATE = 5;                
+                        }
+                        else {
+                            rxSetThrowThrottle(1500);
+                            mixerSetThrowThrottle(500);
+                        }
+                    }
+                }
+                else{
+                    if (counter > 250){
+
+                        if (ABS(attitude.raw[0])<30 && ABS(attitude.raw[1])<30){
+                            YEET_STATE = 5;                
+                        }
+                        else {
+                            rxSetThrowThrottle(1500);
+                            mixerSetThrowThrottle(500);
+                        }
+                        
+                                        
+                    }
+                    else{
+                        rxSetThrowThrottle(1500);
+                        mixerSetThrowThrottle(100);
+                    }
+                }
+                
+                                
+            }
+
+            else if (YEET_STATE == 5){
+                if (THROW_TYPE == 0){
+                    quaternion quat;
+                    getQuaternion(&quat);
+                    quat.x = -quat.x;
+                    quat.y = -quat.y;
+                    quat.z = -quat.z;
+                    quaternion temp;
+                    quaternion vel_all; 
+                    vel_all.w = 0;
+                    vel_all.x = -vel_x;
+                    vel_all.y = -vel_y;
+                    vel_all.z = vel_z;
+                    quaternion vel_local_frame;
+                    imuQuaternionMultiplication(&quat, &vel_all, &temp);
+                    quat.x = -quat.x;
+                    quat.y = -quat.y;
+                    quat.z = -quat.z;
+                    imuQuaternionMultiplication(&temp, &quat, &vel_local_frame);
+                    float xy_sum = sqrtf(vel_local_frame.x*vel_local_frame.x + vel_local_frame.y*vel_local_frame.y);
+                    yeet_back_roll = -vel_local_frame.y/xy_sum*50;
+                    yeet_back_pitch = vel_local_frame.x/xy_sum*50;
+                    rxSetThrowThrottle(1500);
+                    mixerSetThrowThrottle(500);
+                    YEET_STATE = 6;
+                }
+                else if (THROW_TYPE == 1){
+                    yeet_back_pitch = 0;
+                    yeet_back_roll = 0;
+                    YEET_STATE = 6;
+                    rxSetThrowThrottle(1500);
+                    mixerSetThrowThrottle(500);
+                }
+            }
+
+            else if (YEET_STATE == 6){
+                if (THROW_TYPE == 0){
+                    if (counter > 1300){
+                        rxSetThrowThrottle(1000);// to turn off motors completely
+                        mixerSetThrowThrottle(0);
+                    }
+                    else{
+                        rxSetThrowThrottle(1500);
+                        mixerSetThrowThrottle(800);
+                    }
+                }
+                    
+                else if (THROW_TYPE == 1){
+                    if (acc.accADC[2] > avg_acc){
+                        rxSetThrowThrottle(1000);// to turn off motors completely
+                        mixerSetThrowThrottle(0);
+                    }
+                    else if (counter > 1400){
+                        rxSetThrowThrottle(1000);// to turn off motors completely
+                        mixerSetThrowThrottle(0);
+                    }
+                    else{
+                        rxSetThrowThrottle(1500);
+                        mixerSetThrowThrottle(900);
+                    }
+                }
+            }
+
+            
+                
+            lastTime = micros();
+            
+            //    rxSetThrowThrottle(1000); to turn off motors completely
+            //    mixerSetThrowThrottle(0);
+        }
+    }
+    
+    
+    
+    
     // calculate error angle and limit the angle to the max inclination
     // rcDeflection is in range [-1.0, 1.0]
-    float angle = pidProfile->levelAngleLimit * getRcDeflection(axis);
+    //float angle = pidProfile->levelAngleLimit * getRcDeflection(axis);
 #ifdef USE_GPS_RESCUE
-    angle += gpsRescueAngle[axis] / 100; // ANGLE IS IN CENTIDEGREES
+    //angle += gpsRescueAngle[axis] / 100; // ANGLE IS IN CENTIDEGREES
 #endif
+    float angle;
+    if (YEET_STATE == 6){
+        if (axis == 0){
+            angle = yeet_back_roll;
+        }
+        else {
+            angle = yeet_back_pitch;
+        }
+    }
+    else{
+        angle = 0;
+    }
     angle = constrainf(angle, -pidProfile->levelAngleLimit, pidProfile->levelAngleLimit);
     const float errorAngle = angle - ((attitude.raw[axis] - angleTrim->raw[axis]) / 10.0f);
+
     if (FLIGHT_MODE(ANGLE_MODE) || FLIGHT_MODE(GPS_RESCUE_MODE)) {
         // ANGLE mode - control is angle based
         currentPidSetpoint = errorAngle * levelGain;

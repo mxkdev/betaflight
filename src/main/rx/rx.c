@@ -69,6 +69,13 @@
 #include "rx/targetcustomserial.h"
 
 
+#include "fc/runtime_config.h"
+int rxThrow_throttle;
+void rxSetThrowThrottle(int throt){
+    rxThrow_throttle = throt;
+}
+
+
 const char rcChannelLetters[] = "AERT12345678abcdefgh";
 
 static uint16_t rssi = 0;                  // range: [0;1023]
@@ -636,7 +643,16 @@ static void detectAndApplySignalLossBehaviour(void)
         } else
 #endif
         {
+
             rcData[channel] = sample;
+
+            if (FLIGHT_MODE(ANGLE_MODE) && channel == THROTTLE){
+                rcData[THROTTLE] = rxThrow_throttle;
+            }
+            else{
+                
+            }
+            
         }
     }
 
