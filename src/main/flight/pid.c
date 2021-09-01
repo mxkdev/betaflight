@@ -872,6 +872,7 @@ STATIC_UNIT_TESTED float calcHorizonLevelStrength(void)
 }
 
 uint16_t YEET_STATE;
+uint16_t THROW_TYPE;
 int32_t counter;
 float avg_acc;
 float max_acc;
@@ -881,7 +882,7 @@ float vel_y;
 float vel_z;
 float yeet_back_pitch;
 float yeet_back_roll;
-float avg_z_acc;
+float avg_throw_acc;
 
 timeUs_t lastTime;
 
@@ -1012,22 +1013,31 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
                 vel_y += acc_earth_frame.y/1000;
                 vel_z += (acc_earth_frame.z - avg_acc)/1000;
 
-                if (acc_sum/avg_acc*9.81 > 25 && YEET_STATE == 2){
+                //if (acc_sum/avg_acc*9.81 > 25 && YEET_STATE == 2){
+                //try throw detection only by free fall -> close to zero acceleration
+                if (acc_sum/avg_acc*9.81 > 0 && YEET_STATE == 2){
                     YEET_STATE = 3;
                     counter = 0;
                 }
             
                 else if (YEET_STATE == 3){
-                    avg_z_acc = (avg_z_acc*(counter-1) + acc_all.z)/counter;
+                    //avg_z_acc = (avg_z_acc*(counter-1) + acc_all.z)/counter;
+                    avg_throw_acc = (avg_throw_acc*(counter-1) + acc_sum)/counter;
                     if (counter == 20){
-                        if (avg_z_acc/avg_acc*9.81f > -3 && avg_z_acc/avg_acc*9.81f < 2) {
+                        if (avg_throw_acc/avg_acc < 0.15) {
                         YEET_STATE = 4;
                         counter = 0;
+                        if (sqrtf(vel_x*vel_x+vel_y*vel_y)/avg_acc < 0.05){
+                            THROW_TYPE = 1;
+                        }
+                        else{
+                            THROW_TYPE = 0;
+                        }
                         }
                         //detected free fall
                         else {
                             counter = 0;
-                            avg_z_acc = 0;
+                            avg_throw_acc = 0;
                         }
                     }                                
                     
@@ -1038,62 +1048,103 @@ STATIC_UNIT_TESTED FAST_CODE_NOINLINE float pidLevel(int axis, const pidProfile_
             }
 
             else if (YEET_STATE == 4){
-                if (counter > 250){
-
-                    if (ABS(attitude.raw[0])<30 && ABS(attitude.raw[1])<30){
-                        YEET_STATE = 5;                
+                if (THROW_TYPE == 1){
+                    if (counter > 50){
+                        if (ABS(attitude.raw[0])<30 && ABS(attitude.raw[1])<30){
+                            YEET_STATE = 5;                
+                        }
+                        else {
+                            rxSetThrowThrottle(1500);
+                            mixerSetThrowThrottle(500);
+                        }
                     }
-                    else {
-                        rxSetThrowThrottle(1500);
-                        mixerSetThrowThrottle(500);
-                    }
-                    
-                                       
                 }
                 else{
-                    rxSetThrowThrottle(1500);
-                    mixerSetThrowThrottle(100);
+                    if (counter > 250){
+
+                        if (ABS(attitude.raw[0])<30 && ABS(attitude.raw[1])<30){
+                            YEET_STATE = 5;                
+                        }
+                        else {
+                            rxSetThrowThrottle(1500);
+                            mixerSetThrowThrottle(500);
+                        }
+                        
+                                        
+                    }
+                    else{
+                        rxSetThrowThrottle(1500);
+                        mixerSetThrowThrottle(100);
+                    }
                 }
+                
                                 
             }
 
             else if (YEET_STATE == 5){
-                quaternion quat;
-                getQuaternion(&quat);
-                quat.x = -quat.x;
-                quat.y = -quat.y;
-                quat.z = -quat.z;
-                quaternion temp;
-                quaternion vel_all; 
-                vel_all.w = 0;
-                vel_all.x = -vel_x;
-                vel_all.y = -vel_y;
-                vel_all.z = vel_z;
-                quaternion vel_local_frame;
-                imuQuaternionMultiplication(&quat, &vel_all, &temp);
-                quat.x = -quat.x;
-                quat.y = -quat.y;
-                quat.z = -quat.z;
-                imuQuaternionMultiplication(&temp, &quat, &vel_local_frame);
-                float xy_sum = sqrtf(vel_local_frame.x*vel_local_frame.x + vel_local_frame.y*vel_local_frame.y);
-                yeet_back_roll = -vel_local_frame.y/xy_sum*50;
-                yeet_back_pitch = vel_local_frame.x/xy_sum*50;
-                rxSetThrowThrottle(1500);
-                mixerSetThrowThrottle(500);
-                YEET_STATE = 6;
+                if (THROW_TYPE == 0){
+                    quaternion quat;
+                    getQuaternion(&quat);
+                    quat.x = -quat.x;
+                    quat.y = -quat.y;
+                    quat.z = -quat.z;
+                    quaternion temp;
+                    quaternion vel_all; 
+                    vel_all.w = 0;
+                    vel_all.x = -vel_x;
+                    vel_all.y = -vel_y;
+                    vel_all.z = vel_z;
+                    quaternion vel_local_frame;
+                    imuQuaternionMultiplication(&quat, &vel_all, &temp);
+                    quat.x = -quat.x;
+                    quat.y = -quat.y;
+                    quat.z = -quat.z;
+                    imuQuaternionMultiplication(&temp, &quat, &vel_local_frame);
+                    float xy_sum = sqrtf(vel_local_frame.x*vel_local_frame.x + vel_local_frame.y*vel_local_frame.y);
+                    yeet_back_roll = -vel_local_frame.y/xy_sum*50;
+                    yeet_back_pitch = vel_local_frame.x/xy_sum*50;
+                    rxSetThrowThrottle(1500);
+                    mixerSetThrowThrottle(500);
+                    YEET_STATE = 6;
+                }
+                else if (THROW_TYPE == 1){
+                    yeet_back_pitch = 0;
+                    yeet_back_roll = 0;
+                    YEET_STATE = 6;
+                    rxSetThrowThrottle(1500);
+                    mixerSetThrowThrottle(500);
+                }
             }
 
             else if (YEET_STATE == 6){
-                if (counter > 1300){
-                    rxSetThrowThrottle(1000);// to turn off motors completely
-                    mixerSetThrowThrottle(0);
+                if (THROW_TYPE == 0){
+                    if (counter > 1300){
+                        rxSetThrowThrottle(1000);// to turn off motors completely
+                        mixerSetThrowThrottle(0);
+                    }
+                    else{
+                        rxSetThrowThrottle(1500);
+                        mixerSetThrowThrottle(800);
+                    }
                 }
-                else{
-                    rxSetThrowThrottle(1500);
-                    mixerSetThrowThrottle(800);
+                    
+                else if (THROW_TYPE == 1){
+                    if (acc.accADC[2] > avg_acc){
+                        rxSetThrowThrottle(1000);// to turn off motors completely
+                        mixerSetThrowThrottle(0);
+                    }
+                    else if (counter > 1400){
+                        rxSetThrowThrottle(1000);// to turn off motors completely
+                        mixerSetThrowThrottle(0);
+                    }
+                    else{
+                        rxSetThrowThrottle(1500);
+                        mixerSetThrowThrottle(900);
+                    }
                 }
-                
             }
+
+            
                 
             lastTime = micros();
             
