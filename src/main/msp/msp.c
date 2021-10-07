@@ -705,7 +705,7 @@ static bool mspCommonProcessOutCommand(int16_t cmdMSP, sbuf_t *dst, mspPostProce
 
     case MSP_DEBUG:
         for (int i = 0; i < DEBUG16_VALUE_COUNT; i++) {
-            sbufWriteU16(dst, debug[i]);      // 4 variables are here for general monitoring purpose
+            sbufWriteU16(dst, appdata[i]);      // 4 variables are here for general monitoring purpose //with my code there are 6 now
         }
         break;
 
@@ -1009,7 +1009,8 @@ static bool mspProcessOutCommand(int16_t cmdMSP, sbuf_t *dst)
             sbufWriteU16(dst, sensors(SENSOR_ACC) | sensors(SENSOR_BARO) << 1 | sensors(SENSOR_MAG) << 2 | sensors(SENSOR_GPS) << 3 | sensors(SENSOR_RANGEFINDER) << 4 | sensors(SENSOR_GYRO) << 5);
             sbufWriteData(dst, &flightModeFlags, 4);        // unconditional part of flags, first 32 bits
             sbufWriteU8(dst, getCurrentPidProfileIndex());
-            sbufWriteU16(dst, constrain(getAverageSystemLoadPercent(), 0, LOAD_PERCENTAGE_ONE));
+            //sbufWriteU16(dst, constrain(getAverageSystemLoadPercent(), 0, LOAD_PERCENTAGE_ONE));
+            sbufWriteU16(dst, constrain(50, 0, LOAD_PERCENTAGE_ONE));
             if (cmdMSP == MSP_STATUS_EX) {
                 sbufWriteU8(dst, PID_PROFILE_COUNT);
                 sbufWriteU8(dst, getCurrentControlRateProfileIndex());

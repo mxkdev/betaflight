@@ -22,6 +22,7 @@
 
 #define DEBUG16_VALUE_COUNT 4
 extern int16_t debug[DEBUG16_VALUE_COUNT];
+extern int16_t appdata[6];//my code mode
 extern uint8_t debugMode;
 
 #define DEBUG_SET(mode, index, value) {if (debugMode == (mode)) {debug[(index)] = (value);}}

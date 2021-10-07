@@ -51,6 +51,7 @@
 #include "drivers/accgyro/accgyro_spi_mpu6500.h"
 #include "drivers/accgyro/accgyro_spi_mpu9250.h"
 
+
 #ifdef USE_ACC_ADXL345
 #include "drivers/accgyro_legacy/accgyro_adxl345.h"
 #endif
@@ -509,6 +510,15 @@ void accUpdate(timeUs_t currentTimeUs, rollAndPitchTrims_t *rollAndPitchTrims)
     for (int axis = 0; axis < XYZ_AXIS_COUNT; axis++) {
         DEBUG_SET(DEBUG_ACCELEROMETER, axis, acc.dev.ADCRaw[axis]);
         acc.accADC[axis] = acc.dev.ADCRaw[axis];
+        //my code
+        appdata[0] = (int16_t) acc.accADC[0]*100;//acceleration in millimeter/s**2 
+        appdata[1] = (int16_t) acc.accADC[1]*100;
+        appdata[2] = (int16_t) acc.accADC[2]*100;
+        appdata[3] = (int16_t) gyro.gyroADCf[0]; //angle velocity in degrees
+        appdata[4] = (int16_t) gyro.gyroADCf[1];
+        appdata[5] = (int16_t) gyro.gyroADCf[2];
+        //we need 
+        //apdata[0]yeet_state
     }
 
     if (accLpfCutHz) {

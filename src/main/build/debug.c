@@ -25,6 +25,7 @@
 #include "debug.h"
 
 int16_t debug[DEBUG16_VALUE_COUNT];
+int16_t appdata[6]; //my code
 uint8_t debugMode;
 
 #ifdef DEBUG_SECTION_TIMES
